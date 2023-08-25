@@ -1,10 +1,11 @@
-from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 import boto3
 from boto3.session import Session
 from botocore.config import Config
 from botocore.utils import fix_s3_host
 from pydantic.fields import Field
+from typing_extensions import Literal
 
 from datahub.configuration.common import (
     AllowDenyPattern,
