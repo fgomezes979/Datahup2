@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union
 
 import boto3
 from boto3.session import Session
@@ -103,6 +103,14 @@ class AwsConnectionConfig(ConfigModel):
         default=None,
         description="A set of proxy configs to use with AWS. See the [botocore.config](https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html) docs for details.",
     )
+    aws_retry_num: int = Field(
+        default=5,
+        description="Number of times to retry failed AWS requests. See the [botocore.retry](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/retries.html) docs for details.",
+    )
+    aws_retry_mode: Literal["legacy", "standard", "adaptive"] = Field(
+        default="standard",
+        description="Retry mode to use for failed AWS requests. See the [botocore.retry](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/retries.html) docs for details.",
+    )
 
     def _normalized_aws_roles(self) -> List[AwsAssumeRoleConfig]:
         if not self.aws_role:
@@ -173,7 +181,13 @@ class AwsConnectionConfig(ConfigModel):
         return self.get_session().client(
             "s3",
             endpoint_url=self.aws_endpoint_url,
-            config=Config(proxies=self.aws_proxy),
+            config=Config(
+                proxies=self.aws_proxy,
+                retries={
+                    "max_attempts": self.aws_retry_num,
+                    "mode": self.aws_retry_mode,
+                },
+            ),
             verify=verify_ssl,
         )
 
@@ -183,7 +197,13 @@ class AwsConnectionConfig(ConfigModel):
         resource = self.get_session().resource(
             "s3",
             endpoint_url=self.aws_endpoint_url,
-            config=Config(proxies=self.aws_proxy),
+            config=Config(
+                proxies=self.aws_proxy,
+                retries={
+                    "max_attempts": self.aws_retry_num,
+                    "mode": self.aws_retry_mode,
+                },
+            ),
             verify=verify_ssl,
         )
         # according to: https://stackoverflow.com/questions/32618216/override-s3-endpoint-using-boto3-configuration-file
