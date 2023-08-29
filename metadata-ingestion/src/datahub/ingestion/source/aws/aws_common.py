@@ -216,10 +216,28 @@ class AwsConnectionConfig(ConfigModel):
         return resource
 
     def get_glue_client(self) -> "GlueClient":
-        return self.get_session().client("glue")
+        return self.get_session().client(
+            "glue",
+            config=Config(
+                proxies=self.aws_proxy,
+                retries={
+                    "max_attempts": self.aws_retry_num,
+                    "mode": self.aws_retry_mode,
+                },
+            ),
+        )
 
     def get_sagemaker_client(self) -> "SageMakerClient":
-        return self.get_session().client("sagemaker")
+        return self.get_session().client(
+            "sagemaker",
+            config=Config(
+                proxies=self.aws_proxy,
+                retries={
+                    "max_attempts": self.aws_retry_num,
+                    "mode": self.aws_retry_mode,
+                },
+            ),
+        )
 
 
 class AwsSourceConfig(EnvConfigMixin, AwsConnectionConfig):
