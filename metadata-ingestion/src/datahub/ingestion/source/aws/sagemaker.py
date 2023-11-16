@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from typing import DefaultDict, Dict, Iterable
 
@@ -26,6 +27,8 @@ from datahub.ingestion.source.aws.sagemaker_processors.jobs import (
 )
 from datahub.ingestion.source.aws.sagemaker_processors.lineage import LineageProcessor
 from datahub.ingestion.source.aws.sagemaker_processors.models import ModelProcessor
+
+logger = logging.getLogger(__name__)
 
 
 @platform_name("SageMaker")
@@ -57,6 +60,7 @@ class SagemakerSource(Source):
         return cls(config, ctx)
 
     def get_workunits_internal(self) -> Iterable[MetadataWorkUnit]:
+        logger.info("Starting SageMaker ingestion...")
         # get common lineage graph
         lineage_processor = LineageProcessor(
             sagemaker_client=self.sagemaker_client, env=self.env, report=self.report
@@ -65,6 +69,7 @@ class SagemakerSource(Source):
 
         # extract feature groups if specified
         if self.source_config.extract_feature_groups:
+            logger.info("Extracting feature groups...")
             feature_group_processor = FeatureGroupProcessor(
                 sagemaker_client=self.sagemaker_client, env=self.env, report=self.report
             )
@@ -77,6 +82,7 @@ class SagemakerSource(Source):
 
         # extract jobs if specified
         if self.source_config.extract_jobs is not False:
+            logger.info("Extracting jobs...")
             job_processor = JobProcessor(
                 sagemaker_client=self.sagemaker_client,
                 env=self.env,
@@ -91,6 +97,8 @@ class SagemakerSource(Source):
 
         # extract models if specified
         if self.source_config.extract_models:
+            logger.info("Extracting models...")
+
             model_processor = ModelProcessor(
                 sagemaker_client=self.sagemaker_client,
                 env=self.env,
