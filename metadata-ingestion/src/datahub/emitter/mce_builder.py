@@ -48,6 +48,7 @@ from datahub.metadata.schema_classes import (
 )
 from datahub.utilities.urn_encoder import UrnEncoder
 from datahub.utilities.urns.data_flow_urn import DataFlowUrn
+from datahub.utilities.urns.data_policy_urn import DataPolicyUrn
 from datahub.utilities.urns.dataset_urn import DatasetUrn
 
 logger = logging.getLogger(__name__)
@@ -502,3 +503,28 @@ def set_aspect(
     remove_aspect_if_available(mce, aspect_type)
     if aspect is not None:
         mce.proposedSnapshot.aspects.append(aspect)  # type: ignore
+
+
+def make_role_urn(name: str) -> str:
+    return f"urn:li:role:{name}"
+
+
+def make_data_policy_urn(platform: str, name: str, env: str = DEFAULT_ENV) -> str:
+    return make_data_policy_urn_with_platform_instance(
+        platform=platform, name=name, platform_instance=None, env=env
+    )
+
+
+def make_data_policy_urn_with_platform_instance(
+    platform: str, name: str, platform_instance: Optional[str], env: str = DEFAULT_ENV
+) -> str:
+    if DATASET_URN_TO_LOWER:
+        name = name.lower()
+    return str(
+        DataPolicyUrn.create_from_ids(
+            platform_id=platform,
+            data_policy_name=name,
+            env=env,
+            platform_instance=platform_instance,
+        )
+    )

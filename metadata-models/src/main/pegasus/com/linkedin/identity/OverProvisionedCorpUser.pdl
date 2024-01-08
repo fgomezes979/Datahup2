@@ -1,0 +1,34 @@
+namespace com.linkedin.identity
+
+import com.linkedin.common.Urn
+
+import com.linkedin.common.AuditStamp
+
+/**
+  * Information about a ExternalRoleProperties
+  */
+@Aspect = {
+  "name": "overProvisionedCorpUser"
+}
+record OverProvisionedCorpUser {
+  /**
+    * Whether user has granted more permission as compared to its usage history 
+    * found in audit logs
+    */
+  @Searchable = {
+  "fieldType": "BOOLEAN"
+  }
+  status: boolean = false
+
+  /**
+    * Roles on which user has over provisioned privileges
+    */
+  @Relationship = {
+      "/*": {
+        "name": "assigned",
+        "entityTypes": [ "role" ],
+      }
+  }
+  roles: optional array[Urn]
+}
+ 

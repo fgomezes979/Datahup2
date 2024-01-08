@@ -1,9 +1,22 @@
-from typing import List, Optional
+import logging
+from typing import Any, List, Optional
 
 from datahub.configuration.common import AllowDenyPattern
 from datahub.configuration.time_window_config import BucketDuration
 from datahub.ingestion.source.snowflake.constants import SnowflakeObjectDomain
-from datahub.ingestion.source.snowflake.snowflake_config import DEFAULT_TABLES_DENY_LIST
+from datahub.ingestion.source.snowflake.snowflake_config import (
+    DEFAULT_TABLES_DENY_LIST,
+    SnowflakeV2Config,
+)
+from datahub.ingestion.source.snowflake.snowflake_report import SnowflakeV2Report
+from datahub.ingestion.source.snowflake.snowflake_utils import (
+    SnowflakeConnectionMixin,
+    SnowflakeConnectionProtocol,
+    SnowflakeQueryMixin,
+    SnowflakeQueryProtocol,
+)
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 def create_deny_regex_sql_filter(
@@ -202,7 +215,7 @@ class SnowflakeQuery:
         FROM table("{db_name}".information_schema.tag_references_all_columns('{quoted_table_identifier}', '{SnowflakeObjectDomain.TABLE}'));
         """
 
-    # View definition is retrived in information_schema query only if role is owner of view. Hence this query is not used.
+    # View definition is retrieved in information_schema query only if role is owner of view. Hence this query is not used.
     # https://community.snowflake.com/s/article/Is-it-possible-to-see-the-view-definition-in-information-schema-views-from-a-non-owner-role
     @staticmethod
     def views_for_database(db_name: Optional[str]) -> str:
@@ -912,3 +925,68 @@ class SnowflakeQuery:
                 ORDER BY
                     downstream_table_name
             """
+
+    """
+    Table documentation is available at: https://docs.snowflake.com/en/sql-reference/info-schema/object_privileges
+    """
+
+    @staticmethod
+    def role_privileges(databases: List[str]) -> str:
+        """
+        This Information Schema view displays a row for each access
+        privilege granted for all objects defined in your account
+        """
+        quoted_list: List[str] = ["'" + item + "'" for item in databases]
+
+        db_names: str = ",".join(quoted_list)
+        return f"""
+        SELECT  GRANTEE_NAME AS ROLE_NAME,
+                PRIVILEGE,
+                NAME AS DATASET_NAME,
+                TABLE_CATALOG as DATABASE_NAME,
+                TABLE_SCHEMA AS SCHEMA_NAME,
+                GRANTED_ON
+        FROM snowflake.account_usage.grants_to_roles
+        WHERE GRANTED_ON in ('TABLE', 'VIEW') and DATABASE_NAME in ({db_names})
+        """
+
+    @staticmethod
+    def users() -> str:
+        return "SHOW USERS"
+
+    @staticmethod
+    def user_grants(user_name: str) -> str:
+        return f"SHOW GRANTS TO USER {user_name}"
+
+
+class SnowflakeQueryExecutor(
+    SnowflakeConnectionMixin,
+    SnowflakeQueryMixin,
+    SnowflakeConnectionProtocol,
+    SnowflakeQueryProtocol,
+):
+    def __init__(
+        self,
+        config: SnowflakeV2Config,
+        report: SnowflakeV2Report,
+    ):
+        self.config = config
+        self.connection = self.create_connection()
+        self.logger = logger
+
+        # TODO: report and method report_error are not required by this class and hence
+        # the previously written mixin need to be refactored to avoid below code block
+        self.report = report
+
+    def execute_query(
+        self,
+        query: str,
+    ) -> Optional[Any]:
+        if self.connection is None:
+            return None
+
+        return self.query(query=query)
+
+    def report_error(self):
+        # It is to silent the lint
+        pass

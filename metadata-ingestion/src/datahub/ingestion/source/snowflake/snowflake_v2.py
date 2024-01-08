@@ -13,6 +13,7 @@ from snowflake.connector import SnowflakeConnection
 from datahub.configuration.pattern_utils import is_schema_allowed
 from datahub.emitter.mce_builder import (
     make_data_platform_urn,
+    make_data_policy_urn_with_platform_instance,
     make_dataset_urn,
     make_dataset_urn_with_platform_instance,
     make_schema_field_urn,
@@ -49,6 +50,9 @@ from datahub.ingestion.source.snowflake.constants import (
     SnowflakeEdition,
     SnowflakeObjectDomain,
 )
+from datahub.ingestion.source.snowflake.snowflake_access_control import (
+    SnowflakeAccessControl,
+)
 from datahub.ingestion.source.snowflake.snowflake_config import (
     SnowflakeV2Config,
     TagOption,
@@ -57,6 +61,7 @@ from datahub.ingestion.source.snowflake.snowflake_lineage_v2 import (
     SnowflakeLineageExtractor,
 )
 from datahub.ingestion.source.snowflake.snowflake_profiler import SnowflakeProfiler
+from datahub.ingestion.source.snowflake.snowflake_query import SnowflakeQueryExecutor
 from datahub.ingestion.source.snowflake.snowflake_report import SnowflakeV2Report
 from datahub.ingestion.source.snowflake.snowflake_schema import (
     SnowflakeColumn,
@@ -288,6 +293,17 @@ class SnowflakeV2Source(
                 pipeline_name=self.ctx.pipeline_name,
                 run_id=self.ctx.run_id,
             )
+
+        self.snowflake_access_control_extractor = SnowflakeAccessControl(
+            config=self.config,
+            report=self.report,
+            snowflake_query_executor=SnowflakeQueryExecutor(
+                config=self.config,
+                report=self.report,
+            ),
+            dataset_urn_builder=self.gen_dataset_urn,
+            datapolicy_urn_builder=self.gen_datapolicy_urn,
+        )
 
         if config.is_profiling_enabled():
             # For profiling
@@ -609,6 +625,11 @@ class SnowflakeV2Source(
             self.config.include_usage_stats or self.config.include_operational_stats
         ) and self.usage_extractor:
             yield from self.usage_extractor.get_usage_workunits(discovered_datasets)
+
+        if self.config.extract_access_control:
+            yield from self.snowflake_access_control_extractor.get_workunits(
+                databases=databases
+            )
 
     def report_cache_info(self):
         lru_cache_functions: List[Callable] = [
@@ -1039,6 +1060,14 @@ class SnowflakeV2Source(
         return make_dataset_urn_with_platform_instance(
             platform=self.platform,
             name=dataset_identifier,
+            platform_instance=self.config.platform_instance,
+            env=self.config.env,
+        )
+
+    def gen_datapolicy_urn(self, datapolicy_identifier: str) -> str:
+        return make_data_policy_urn_with_platform_instance(
+            platform=self.platform,
+            name=datapolicy_identifier,
             platform_instance=self.config.platform_instance,
             env=self.config.env,
         )

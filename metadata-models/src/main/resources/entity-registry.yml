@@ -10,6 +10,9 @@ entities:
     aspects:
       - roleProperties
       - actors
+      - overProvisionedRole
+      - roleUsageStatistics
+      - inheritedRole
   - name: dataset
     doc: Datasets represent logical or physical data assets stored or represented in various data platforms. Tables, Views, Streams are all instances of datasets.
     category: core
@@ -42,6 +45,9 @@ entities:
       - dataPlatformInstance
       - browsePathsV2
       - access
+      - datasetPrivacyClassification
+      - isDataMaskingRequired
+      
   - name: dataHubPolicy
     doc: DataHub Policies represent access policies granted to users or groups on metadata operations like edit, view etc.
     category: internal
@@ -174,6 +180,8 @@ entities:
       - corpUserSettings
       - origin
       - roleMembership
+      - overProvisionedCorpUser
+      - corpUserUsageStatistics
   - name: corpGroup
     doc: CorpGroup represents an identity of a group of users in the enterprise.
     keyAspect: corpGroupKey
@@ -466,6 +474,12 @@ entities:
     aspects:
       - dataContractProperties
       - dataContractStatus
+      - status
+  - name: dataPolicy
+    doc: DataPolicy of a DataPlatform.
+    keyAspect: dataPolicyKey
+    aspects:
+      - dataPolicyInfo
       - status
 
 events:
