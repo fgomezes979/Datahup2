@@ -11,6 +11,7 @@
                 },
                 {
                     "com.linkedin.pegasus2avro.ml.metadata.MLPrimaryKeyProperties": {
+                        "customProperties": {},
                         "description": "Driver ID",
                         "dataType": "ORDINAL",
                         "sources": [
@@ -23,7 +24,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -38,6 +40,7 @@
                 },
                 {
                     "com.linkedin.pegasus2avro.ml.metadata.MLFeatureProperties": {
+                        "customProperties": {},
                         "description": "Conv rate",
                         "dataType": "CONTINUOUS",
                         "sources": [
@@ -50,7 +53,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -65,6 +69,7 @@
                 },
                 {
                     "com.linkedin.pegasus2avro.ml.metadata.MLFeatureProperties": {
+                        "customProperties": {},
                         "description": "Acc rate",
                         "dataType": "CONTINUOUS",
                         "sources": [
@@ -77,7 +82,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -92,6 +98,7 @@
                 },
                 {
                     "com.linkedin.pegasus2avro.ml.metadata.MLFeatureProperties": {
+                        "customProperties": {},
                         "description": "Avg daily trips",
                         "dataType": "ORDINAL",
                         "sources": [
@@ -104,7 +111,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -119,6 +127,7 @@
                 },
                 {
                     "com.linkedin.pegasus2avro.ml.metadata.MLFeatureProperties": {
+                        "customProperties": {},
                         "description": "String feature",
                         "dataType": "TEXT",
                         "sources": [
@@ -131,7 +140,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -170,7 +180,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -189,7 +200,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -204,6 +216,7 @@
                 },
                 {
                     "com.linkedin.pegasus2avro.ml.metadata.MLFeatureProperties": {
+                        "customProperties": {},
                         "dataType": "CONTINUOUS",
                         "sources": [
                             "urn:li:dataset:(urn:li:dataPlatform:request,vals_to_add,PROD)",
@@ -216,7 +229,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -231,6 +245,7 @@
                 },
                 {
                     "com.linkedin.pegasus2avro.ml.metadata.MLFeatureProperties": {
+                        "customProperties": {},
                         "dataType": "CONTINUOUS",
                         "sources": [
                             "urn:li:dataset:(urn:li:dataPlatform:request,vals_to_add,PROD)",
@@ -243,7 +258,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -278,7 +294,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -297,7 +314,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1586847600000,
-        "runId": "feast-repository-test"
+        "runId": "feast-repository-test",
+        "lastRunId": "no-run-id-provided"
     }
 }
 ]
