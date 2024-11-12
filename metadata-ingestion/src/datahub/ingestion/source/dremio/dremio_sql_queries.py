@@ -237,19 +237,27 @@ class DremioSQLQueries:
 
     QUERY_ALL_JOBS = """
     SELECT
-        *
+        job_id,
+        user_name,
+        submitted_ts,
+        query,
+        queried_datasets
     FROM
         SYS.JOBS_RECENT
     WHERE
         STATUS = 'COMPLETED'
-        AND ARRAY_SIZE(queried_datasets)>0
+        AND LENGTH(queried_datasets)>0
         AND user_name != '$dremio$'
         AND query_type not like '%INTERNAL%'
     """
 
     QUERY_ALL_JOBS_CLOUD = """
         SELECT
-            *
+            job_id,
+            user_name,
+            submitted_ts,
+            query,
+            CONCAT('[', ARRAY_TO_STRING(queried_datasets, ','), ']') as queried_datasets
         FROM
             sys.project.history.jobs
         WHERE
