@@ -1,10 +1,15 @@
+import faulthandler
 import json
 import logging
+import sys
+import threading
+import traceback
 import uuid
+from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional
 
 from pyiceberg.catalog import Catalog
-from pyiceberg.exceptions import NoSuchIcebergTableError
+from pyiceberg.exceptions import NoSuchIcebergTableError, NoSuchPropertyException
 from pyiceberg.schema import Schema, SchemaVisitorPerPrimitiveType, visit
 from pyiceberg.table import Table
 from pyiceberg.typedef import Identifier
@@ -75,11 +80,48 @@ from datahub.metadata.schema_classes import (
     OwnershipClass,
     OwnershipTypeClass,
 )
+from datahub.utilities.perf_timer import PerfTimer
+from datahub.utilities.threaded_iterator_executor import ThreadedIteratorExecutor
 
 LOGGER = logging.getLogger(__name__)
 logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(
     logging.WARNING
 )
+
+faulthandler.enable()
+
+
+def thread_dump():
+    """Function purely for testing purposes"""
+    # deduplicate threads with same stack trace
+    stack_traces = defaultdict(list)
+    frames = sys._current_frames()  # pylint: disable=protected-access
+
+    for t in threading.enumerate():
+        try:
+            assert t.ident is not None
+            stack_trace = "".join(traceback.format_stack(frames[t.ident]))
+        except KeyError:
+            # the thread may have been destroyed already while enumerating, in such
+            # case, skip to next thread.
+            continue
+        thread_ident_name = (t.ident, t.name)
+        stack_traces[stack_trace].append(thread_ident_name)
+
+    all_traces = ["=" * 10 + " THREAD DUMP " + "=" * 10]
+    for stack, identity in stack_traces.items():
+        ident, name = identity[0]
+        trace = "--- Thread #%s name: %s %s---\n" % (
+            ident,
+            name,
+            "and other %d threads" % (len(identity) - 1) if len(identity) > 1 else "",
+        )
+        if len(identity) > 1:
+            trace += "threads: %s\n" % identity
+        trace += stack
+        all_traces.append(trace)
+    all_traces.append("=" * 30)
+    return "\n".join(all_traces)
 
 
 @platform_name("Iceberg")
@@ -130,74 +172,130 @@ class IcebergSource(StatefulIngestionSourceBase):
         ]
 
     def _get_datasets(self, catalog: Catalog) -> Iterable[Identifier]:
-        for namespace in catalog.list_namespaces():
-            yield from catalog.list_tables(namespace)
+        namespaces = catalog.list_namespaces()
+        LOGGER.debug(
+            f"Retrieved {len(namespaces)} namespaces, first 10: {namespaces[:10]}"
+        )
+        tables_count = 0
+        for namespace in namespaces:
+            tables = catalog.list_tables(namespace)
+            tables_count += len(tables)
+            LOGGER.debug(
+                f"Retrieved {len(tables)} tables for namespace: {namespace}, in total retrieved {tables_count}, first 10: {tables[:10]}"
+            )
+            yield from tables
 
     def get_workunits_internal(self) -> Iterable[MetadataWorkUnit]:
-        try:
-            catalog = self.config.get_catalog()
-        except Exception as e:
-            LOGGER.error("Failed to get catalog", exc_info=True)
-            self.report.report_failure("get-catalog", f"Failed to get catalog: {e}")
-            return
+        thread_local = threading.local()
 
-        for dataset_path in self._get_datasets(catalog):
+        def _process_dataset(dataset_path):
+            LOGGER.debug("Processing dataset for path %s", dataset_path)
             dataset_name = ".".join(dataset_path)
             if not self.config.table_pattern.allowed(dataset_name):
                 # Dataset name is rejected by pattern, report as dropped.
                 self.report.report_dropped(dataset_name)
-                continue
-
+                return
             try:
-                # Try to load an Iceberg table.  Might not contain one, this will be caught by NoSuchIcebergTableError.
-                table = catalog.load_table(dataset_path)
+                if not hasattr(thread_local, "local_catalog"):
+                    LOGGER.debug(
+                        "Didn't find local_catalog in thread_local (%s), initializing new catalog",
+                        thread_local,
+                    )
+                    thread_local.local_catalog = self.config.get_catalog()
+
+                with PerfTimer() as timer:
+                    table = thread_local.local_catalog.load_table(dataset_path)
+                    time_taken = timer.elapsed_seconds()
+                    self.report.report_table_load_time(time_taken)
+                LOGGER.debug("Loaded table: %s, time taken: %s", table, time_taken)
                 yield from self._create_iceberg_workunit(dataset_name, table)
+            except NoSuchPropertyException as e:
+                self.report.report_warning(
+                    "table-property-missing",
+                    f"Failed to create workunit for {dataset_name}. {e}",
+                )
+                LOGGER.warning(
+                    f"NoSuchPropertyException while processing table {dataset_path}, skipping it.",
+                )
             except NoSuchIcebergTableError as e:
+                self.report.report_warning(
+                    "no-iceberg-table",
+                    f"Failed to create workunit for {dataset_name}. {e}",
+                )
+                LOGGER.warning(
+                    f"NoSuchIcebergTableError while processing table {dataset_path}, skipping it.",
+                )
+            except Exception as e:
                 self.report.report_failure("general", f"Failed to create workunit: {e}")
                 LOGGER.exception(
                     f"Exception while processing table {dataset_path}, skipping it.",
                 )
+            return []
+
+        try:
+            catalog = self.config.get_catalog()
+        except Exception as e:
+            self.report.report_failure("get-catalog", f"Failed to get catalog: {e}")
+            return
+
+        for wu in ThreadedIteratorExecutor.process(
+            worker_func=_process_dataset,
+            args_list=[(dataset_path,) for dataset_path in self._get_datasets(catalog)],
+            max_workers=self.config.processing_threads,
+        ):
+            yield wu
 
     def _create_iceberg_workunit(
         self, dataset_name: str, table: Table
     ) -> Iterable[MetadataWorkUnit]:
-        self.report.report_table_scanned(dataset_name)
-        dataset_urn: str = make_dataset_urn_with_platform_instance(
-            self.platform,
-            dataset_name,
-            self.config.platform_instance,
-            self.config.env,
-        )
-        dataset_snapshot = DatasetSnapshot(
-            urn=dataset_urn,
-            aspects=[Status(removed=False)],
-        )
+        with PerfTimer() as timer:
+            self.report.report_table_scanned(dataset_name)
+            LOGGER.debug("Processing table %s", dataset_name)
+            dataset_urn: str = make_dataset_urn_with_platform_instance(
+                self.platform,
+                dataset_name,
+                self.config.platform_instance,
+                self.config.env,
+            )
+            dataset_snapshot = DatasetSnapshot(
+                urn=dataset_urn,
+                aspects=[Status(removed=False)],
+            )
 
-        # Dataset properties aspect.
-        custom_properties = table.metadata.properties.copy()
-        custom_properties["location"] = table.metadata.location
-        custom_properties["format-version"] = str(table.metadata.format_version)
-        custom_properties["partition-spec"] = str(self._get_partition_aspect(table))
-        if table.current_snapshot():
-            custom_properties["snapshot-id"] = str(table.current_snapshot().snapshot_id)
-            custom_properties["manifest-list"] = table.current_snapshot().manifest_list
-        dataset_properties = DatasetPropertiesClass(
-            name=table.name()[-1],
-            tags=[],
-            description=table.metadata.properties.get("comment", None),
-            customProperties=custom_properties,
-        )
-        dataset_snapshot.aspects.append(dataset_properties)
+            # Dataset properties aspect.
+            custom_properties = table.metadata.properties.copy()
+            custom_properties["location"] = table.metadata.location
+            custom_properties["format-version"] = str(table.metadata.format_version)
+            custom_properties["partition-spec"] = str(self._get_partition_aspect(table))
+            if table.current_snapshot():
+                custom_properties["snapshot-id"] = str(
+                    table.current_snapshot().snapshot_id
+                )
+                custom_properties[
+                    "manifest-list"
+                ] = table.current_snapshot().manifest_list
+            dataset_properties = DatasetPropertiesClass(
+                name=table.name()[-1],
+                tags=[],
+                description=table.metadata.properties.get("comment", None),
+                customProperties=custom_properties,
+            )
+            dataset_snapshot.aspects.append(dataset_properties)
+            # Dataset ownership aspect.
+            dataset_ownership = self._get_ownership_aspect(table)
+            if dataset_ownership:
+                LOGGER.debug(
+                    "Adding ownership: %s to the dataset %s",
+                    dataset_ownership,
+                    dataset_name,
+                )
+                dataset_snapshot.aspects.append(dataset_ownership)
 
-        # Dataset ownership aspect.
-        dataset_ownership = self._get_ownership_aspect(table)
-        if dataset_ownership:
-            dataset_snapshot.aspects.append(dataset_ownership)
+            schema_metadata = self._create_schema_metadata(dataset_name, table)
+            dataset_snapshot.aspects.append(schema_metadata)
 
-        schema_metadata = self._create_schema_metadata(dataset_name, table)
-        dataset_snapshot.aspects.append(schema_metadata)
-
-        mce = MetadataChangeEvent(proposedSnapshot=dataset_snapshot)
+            mce = MetadataChangeEvent(proposedSnapshot=dataset_snapshot)
+        self.report.report_table_processing_time(timer.elapsed_seconds())
         yield MetadataWorkUnit(id=dataset_name, mce=mce)
 
         dpi_aspect = self._get_dataplatform_instance_aspect(dataset_urn=dataset_urn)
